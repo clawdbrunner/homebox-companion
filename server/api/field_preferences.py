@@ -126,12 +126,17 @@ async def get_prompt_preview(
     if output_language.lower() == "english":
         output_language = None
 
-    # Example tags for preview
-    example_tags = [
-        {"id": "abc123", "name": "Electronics"},
-        {"id": "def456", "name": "Tools"},
-        {"id": "ghi789", "name": "Supplies"},
-    ]
+    # Example tags for preview - omitted when tag suggestions are disabled so
+    # the preview matches what the LLM actually receives at runtime.
+    example_tags = (
+        []
+        if prefs.disable_tag_suggestions
+        else [
+            {"id": "abc123", "name": "Electronics"},
+            {"id": "def456", "name": "Tools"},
+            {"id": "ghi789", "name": "Supplies"},
+        ]
+    )
 
     # Generate the system prompt
     prompt = build_detection_system_prompt(

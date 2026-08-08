@@ -144,8 +144,12 @@ def load_field_preferences() -> FieldPreferences:
 
     try:
         file_data = json.loads(PREFERENCES_FILE.read_text(encoding="utf-8"))
-        # User overrides on top of defaults
-        merged = defaults.model_dump() | {k: v for k, v in file_data.items() if v is not None}
+        # User overrides on top of defaults. disable_tag_suggestions is an
+        # operator-only kill switch (env var) and must never be overridden
+        # by the settings file/API.
+        merged = defaults.model_dump() | {
+            k: v for k, v in file_data.items() if v is not None and k != "disable_tag_suggestions"
+        }
         return FieldPreferences.model_validate(merged)
     except (json.JSONDecodeError, ValidationError) as e:
         logger.warning(f"Invalid field preferences config file, using defaults: {e}")
@@ -165,6 +169,10 @@ def save_field_preferences(preferences: FieldPreferences) -> None:
     overrides = {}
 
     for field in FieldPreferences.model_fields:
+        # disable_tag_suggestions is an operator-only kill switch (env var)
+        # and must never be persisted as a user-settable override.
+        if field == "disable_tag_suggestions":
+            continue
         user_val = getattr(preferences, field)
         default_val = getattr(defaults, field)
         if user_val != default_val:
@@ -188,8 +196,11 @@ def load_user_overrides() -> dict[str, str | None]:
     Returns:
         Dict with all preference fields, None for non-overridden fields.
     """
-    # Start with all fields as None (no override)
-    result: dict[str, str | None] = {field: None for field in FieldPreferences.model_fields}
+    # Start with all fields as None (no override). disable_tag_suggestions is
+    # an operator-only kill switch (env var) and is not user-overridable.
+    result: dict[str, str | None] = {
+        field: None for field in FieldPreferences.model_fields if field != "disable_tag_suggestions"
+    }
 
     if not PREFERENCES_FILE.exists():
         return result

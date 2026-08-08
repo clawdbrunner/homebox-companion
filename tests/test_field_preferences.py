@@ -176,6 +176,61 @@ class TestDisableTagSuggestions:
 
         assert FieldPreferences().disable_tag_suggestions is True
 
+    def test_env_wins_over_settings_api_override_attempt(self, monkeypatch, tmp_path) -> None:
+        """The operator's env var must win even if a settings-API save tries to flip it."""
+        from homebox_companion.core.field_preferences import FieldPreferences
+
+        monkeypatch.setenv("HBC_AI_DISABLE_TAG_SUGGESTIONS", "true")
+
+        config_dir = tmp_path / "config"
+        config_dir.mkdir()
+        prefs_file = config_dir / "field_preferences.json"
+
+        monkeypatch.setattr(field_preferences, "CONFIG_DIR", config_dir)
+        monkeypatch.setattr(field_preferences, "PREFERENCES_FILE", prefs_file)
+        field_preferences.get_defaults.cache_clear()
+
+        # Simulate a client attempting to override via the settings API.
+        field_preferences.save_field_preferences(FieldPreferences(disable_tag_suggestions=False))
+
+        loaded = field_preferences.load_field_preferences()
+        assert loaded.disable_tag_suggestions is True
+
+    def test_save_never_writes_disable_tag_suggestions_key(self, monkeypatch, tmp_path) -> None:
+        """save_field_preferences must never persist disable_tag_suggestions, even if non-default."""
+        from homebox_companion.core.field_preferences import FieldPreferences
+
+        for key in ("HBC_AI_DISABLE_TAG_SUGGESTIONS",):
+            monkeypatch.delenv(key, raising=False)
+
+        config_dir = tmp_path / "config"
+        config_dir.mkdir()
+        prefs_file = config_dir / "field_preferences.json"
+
+        monkeypatch.setattr(field_preferences, "CONFIG_DIR", config_dir)
+        monkeypatch.setattr(field_preferences, "PREFERENCES_FILE", prefs_file)
+        field_preferences.get_defaults.cache_clear()
+
+        field_preferences.save_field_preferences(FieldPreferences(disable_tag_suggestions=True))
+
+        saved_data = json.loads(prefs_file.read_text())
+        assert "disable_tag_suggestions" not in saved_data
+
+    def test_load_user_overrides_excludes_disable_tag_suggestions(self, monkeypatch, tmp_path) -> None:
+        """load_user_overrides must never expose disable_tag_suggestions as user-overridable."""
+        config_dir = tmp_path / "config"
+        config_dir.mkdir()
+        prefs_file = config_dir / "field_preferences.json"
+        prefs_file.write_text(json.dumps({"disable_tag_suggestions": True, "name": "Custom name"}))
+
+        monkeypatch.setattr(field_preferences, "CONFIG_DIR", config_dir)
+        monkeypatch.setattr(field_preferences, "PREFERENCES_FILE", prefs_file)
+        field_preferences.get_defaults.cache_clear()
+
+        overrides = field_preferences.load_user_overrides()
+
+        assert "disable_tag_suggestions" not in overrides
+
 
 class TestResetPreferences:
     """Test resetting preferences to defaults."""
