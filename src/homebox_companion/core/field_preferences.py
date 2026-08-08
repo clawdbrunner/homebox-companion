@@ -89,6 +89,9 @@ class FieldPreferences(BaseSettings):
         "Also note if sealed/new-in-box. Leave null for normal items."
     )
 
+    # Disable AI tag suggestions entirely - env var: HBC_AI_DISABLE_TAG_SUGGESTIONS
+    disable_tag_suggestions: bool = False
+
     @property
     def using_legacy_label_env(self) -> bool:
         """Check if the deprecated HBC_AI_DEFAULT_LABEL_ID env var is being used.
@@ -108,7 +111,7 @@ class FieldPreferences(BaseSettings):
         Returns:
             Dict mapping field names to their effective instructions.
         """
-        return self.model_dump(exclude={"output_language", "default_tag_id"})
+        return self.model_dump(exclude={"output_language", "default_tag_id", "disable_tag_suggestions"})
 
 
 @lru_cache(maxsize=1)

@@ -495,7 +495,7 @@ async def get_vision_context(
 
     return VisionContext(
         token=token,
-        tags=await get_tags_for_context(token),
+        tags=[] if prefs.disable_tag_suggestions else await get_tags_for_context(token),
         # get_effective_customizations returns all prompt fields
         field_preferences=prefs.get_effective_customizations(),
         output_language=output_language,

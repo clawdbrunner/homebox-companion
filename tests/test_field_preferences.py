@@ -140,6 +140,42 @@ class TestGetEffectiveCustomizations:
         assert "output_language" not in result
         assert "default_tag_id" not in result
 
+    def test_excludes_disable_tag_suggestions(self) -> None:
+        """disable_tag_suggestions is metadata, not a prompt instruction, so it must be excluded."""
+        from homebox_companion.core.field_preferences import FieldPreferences
+
+        prefs = FieldPreferences(disable_tag_suggestions=True, name="Custom name")
+
+        result = prefs.get_effective_customizations()
+
+        assert "name" in result
+        assert "disable_tag_suggestions" not in result
+
+
+class TestDisableTagSuggestions:
+    """Test the HBC_AI_DISABLE_TAG_SUGGESTIONS toggle."""
+
+    def test_defaults_to_false(self, monkeypatch) -> None:
+        """Without the env var set, disable_tag_suggestions should default to False."""
+        import os
+
+        from homebox_companion.core.field_preferences import FieldPreferences
+
+        monkeypatch.delenv("HBC_AI_DISABLE_TAG_SUGGESTIONS", raising=False)
+        for key in list(os.environ.keys()):
+            if key.startswith("HBC_AI_"):
+                monkeypatch.delenv(key, raising=False)
+
+        assert FieldPreferences().disable_tag_suggestions is False
+
+    def test_settable_via_env_var(self, monkeypatch) -> None:
+        """Setting HBC_AI_DISABLE_TAG_SUGGESTIONS=true should enable the toggle."""
+        from homebox_companion.core.field_preferences import FieldPreferences
+
+        monkeypatch.setenv("HBC_AI_DISABLE_TAG_SUGGESTIONS", "true")
+
+        assert FieldPreferences().disable_tag_suggestions is True
+
 
 class TestResetPreferences:
     """Test resetting preferences to defaults."""
