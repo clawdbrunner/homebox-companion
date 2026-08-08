@@ -6,6 +6,7 @@ from pydantic import BaseModel
 
 from homebox_companion.core.field_preferences import (
     FieldPreferences,
+    enforce_operator_disable_tag_suggestions,
     get_defaults,
     load_user_overrides,
     reset_field_preferences,
@@ -118,6 +119,10 @@ async def get_prompt_preview(
     Authentication is enforced at router level.
     """
     prefs = body.field_preferences
+
+    # disable_tag_suggestions is an operator-only kill switch (env var) and
+    # must never be settable by a client via the request body.
+    prefs = enforce_operator_disable_tag_suggestions(prefs)
 
     # Use provided preferences directly - they already have defaults baked in
     field_prefs = prefs.get_effective_customizations()

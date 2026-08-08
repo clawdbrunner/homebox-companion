@@ -18,7 +18,11 @@ if TYPE_CHECKING:
     from homebox_companion.core.persistent_settings import CustomFieldDefinition
     from homebox_companion.mcp.executor import ToolExecutor
 
-from homebox_companion.core.field_preferences import FieldPreferences, load_field_preferences
+from homebox_companion.core.field_preferences import (
+    FieldPreferences,
+    enforce_operator_disable_tag_suggestions,
+    load_field_preferences,
+)
 
 
 class ClientHolder:
@@ -484,6 +488,10 @@ async def get_vision_context(
             prefs = load_field_preferences()
     else:
         prefs = load_field_preferences()
+
+    # disable_tag_suggestions is an operator-only kill switch (env var) and
+    # must never be settable by a client, regardless of the source above.
+    prefs = enforce_operator_disable_tag_suggestions(prefs)
 
     # Determine output language (None means use default English)
     output_language = None if prefs.output_language.lower() == "english" else prefs.output_language

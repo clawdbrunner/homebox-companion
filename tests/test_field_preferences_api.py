@@ -26,22 +26,32 @@ class TestPromptPreview:
     """Test the /settings/prompt-preview endpoint."""
 
     def test_disable_tag_suggestions_omits_example_tags(
-        self, field_preferences_test_client: TestClient
+        self, field_preferences_test_client: TestClient, monkeypatch
     ) -> None:
-        """When disable_tag_suggestions is True, the preview must not contain example tag names."""
-        response = field_preferences_test_client.post(
-            "/settings/prompt-preview",
-            json={
-                "field_preferences": {"disable_tag_suggestions": True},
-                "custom_fields": [],
-            },
-        )
+        """When the operator has disabled tag suggestions via env, the preview must not
+        contain example tag names. disable_tag_suggestions is operator-only, so this is
+        driven by the env var rather than the request body."""
+        from homebox_companion.core import field_preferences
 
-        assert response.status_code == 200
-        prompt = response.json()["prompt"]
+        monkeypatch.setenv("HBC_AI_DISABLE_TAG_SUGGESTIONS", "true")
+        field_preferences.get_defaults.cache_clear()
 
-        for tag_name in ("Electronics", "Tools", "Supplies"):
-            assert tag_name not in prompt
+        try:
+            response = field_preferences_test_client.post(
+                "/settings/prompt-preview",
+                json={
+                    "field_preferences": {},
+                    "custom_fields": [],
+                },
+            )
+
+            assert response.status_code == 200
+            prompt = response.json()["prompt"]
+
+            for tag_name in ("Electronics", "Tools", "Supplies"):
+                assert tag_name not in prompt
+        finally:
+            field_preferences.get_defaults.cache_clear()
 
     def test_enabled_tag_suggestions_includes_example_tags(
         self, field_preferences_test_client: TestClient
@@ -59,3 +69,30 @@ class TestPromptPreview:
         prompt = response.json()["prompt"]
 
         assert "Electronics" in prompt
+
+    def test_operator_env_disable_wins_over_client_false(
+        self, field_preferences_test_client: TestClient, monkeypatch
+    ) -> None:
+        """When the operator has set HBC_AI_DISABLE_TAG_SUGGESTIONS=true, a client
+        sending disable_tag_suggestions=false must not see example tags in the preview."""
+        from homebox_companion.core import field_preferences
+
+        monkeypatch.setenv("HBC_AI_DISABLE_TAG_SUGGESTIONS", "true")
+        field_preferences.get_defaults.cache_clear()
+
+        try:
+            response = field_preferences_test_client.post(
+                "/settings/prompt-preview",
+                json={
+                    "field_preferences": {"disable_tag_suggestions": False},
+                    "custom_fields": [],
+                },
+            )
+
+            assert response.status_code == 200
+            prompt = response.json()["prompt"]
+
+            for tag_name in ("Electronics", "Tools", "Supplies"):
+                assert tag_name not in prompt
+        finally:
+            field_preferences.get_defaults.cache_clear()

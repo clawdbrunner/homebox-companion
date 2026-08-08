@@ -232,6 +232,52 @@ class TestDisableTagSuggestions:
         assert "disable_tag_suggestions" not in overrides
 
 
+class TestEnforceOperatorDisableTagSuggestions:
+    """Test the helper that forces disable_tag_suggestions to the env-resolved value."""
+
+    def test_env_true_overrides_client_false(self, monkeypatch) -> None:
+        """A client-supplied False must be forced to True when the operator has enabled the kill switch."""
+        from homebox_companion.core.field_preferences import FieldPreferences
+
+        monkeypatch.setenv("HBC_AI_DISABLE_TAG_SUGGESTIONS", "true")
+        field_preferences.get_defaults.cache_clear()
+
+        client_prefs = FieldPreferences(disable_tag_suggestions=False)
+        result = field_preferences.enforce_operator_disable_tag_suggestions(client_prefs)
+
+        assert result.disable_tag_suggestions is True
+
+        field_preferences.get_defaults.cache_clear()
+
+    def test_env_false_overrides_client_true(self, monkeypatch) -> None:
+        """A client-supplied True must be forced to False when the operator hasn't enabled the kill switch."""
+        from homebox_companion.core.field_preferences import FieldPreferences
+
+        monkeypatch.delenv("HBC_AI_DISABLE_TAG_SUGGESTIONS", raising=False)
+        field_preferences.get_defaults.cache_clear()
+
+        client_prefs = FieldPreferences(disable_tag_suggestions=True)
+        result = field_preferences.enforce_operator_disable_tag_suggestions(client_prefs)
+
+        assert result.disable_tag_suggestions is False
+
+        field_preferences.get_defaults.cache_clear()
+
+    def test_preserves_other_fields(self, monkeypatch) -> None:
+        """Only disable_tag_suggestions should be overwritten; other fields pass through unchanged."""
+        from homebox_companion.core.field_preferences import FieldPreferences
+
+        monkeypatch.setenv("HBC_AI_DISABLE_TAG_SUGGESTIONS", "true")
+        field_preferences.get_defaults.cache_clear()
+
+        client_prefs = FieldPreferences(disable_tag_suggestions=False, name="Custom name")
+        result = field_preferences.enforce_operator_disable_tag_suggestions(client_prefs)
+
+        assert result.name == "Custom name"
+
+        field_preferences.get_defaults.cache_clear()
+
+
 class TestResetPreferences:
     """Test resetting preferences to defaults."""
 

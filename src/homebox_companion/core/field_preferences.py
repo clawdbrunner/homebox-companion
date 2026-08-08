@@ -217,6 +217,23 @@ def load_user_overrides() -> dict[str, str | None]:
         return result
 
 
+def enforce_operator_disable_tag_suggestions(prefs: FieldPreferences) -> FieldPreferences:
+    """Force disable_tag_suggestions to the env-resolved operator value.
+
+    disable_tag_suggestions is an operator-only kill switch (env var) and
+    must never be settable by a client. Apply this to any FieldPreferences
+    built from external input (request bodies, headers) before it's used,
+    regardless of whether it went through load_field_preferences().
+
+    Args:
+        prefs: A FieldPreferences instance, possibly built from client input.
+
+    Returns:
+        A copy of prefs with disable_tag_suggestions forced to get_defaults().
+    """
+    return prefs.model_copy(update={"disable_tag_suggestions": get_defaults().disable_tag_suggestions})
+
+
 def reset_field_preferences() -> FieldPreferences:
     """Reset to defaults by deleting the overrides file.
 
