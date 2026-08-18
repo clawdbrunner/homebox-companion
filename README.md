@@ -390,6 +390,7 @@ Customize how AI formats detected item fields. Set via environment variables or 
 | `HBC_AI_PURCHASE_FROM` | Instructions for retailer extraction |
 | `HBC_AI_NOTES` | Custom instructions for notes |
 | `HBC_AI_NAMING_EXAMPLES` | Example names to guide the AI |
+| `HBC_AI_DISABLE_TAG_SUGGESTIONS` | Disable AI tag suggestions entirely (default: false) |
 
 </details>
 

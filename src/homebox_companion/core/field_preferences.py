@@ -89,6 +89,9 @@ class FieldPreferences(BaseSettings):
         "Also note if sealed/new-in-box. Leave null for normal items."
     )
 
+    # Disable AI tag suggestions entirely - env var: HBC_AI_DISABLE_TAG_SUGGESTIONS
+    disable_tag_suggestions: bool = False
+
     @property
     def using_legacy_label_env(self) -> bool:
         """Check if the deprecated HBC_AI_DEFAULT_LABEL_ID env var is being used.
@@ -108,7 +111,7 @@ class FieldPreferences(BaseSettings):
         Returns:
             Dict mapping field names to their effective instructions.
         """
-        return self.model_dump(exclude={"output_language", "default_tag_id"})
+        return self.model_dump(exclude={"output_language", "default_tag_id", "disable_tag_suggestions"})
 
 
 @lru_cache(maxsize=1)
@@ -141,8 +144,12 @@ def load_field_preferences() -> FieldPreferences:
 
     try:
         file_data = json.loads(PREFERENCES_FILE.read_text(encoding="utf-8"))
-        # User overrides on top of defaults
-        merged = defaults.model_dump() | {k: v for k, v in file_data.items() if v is not None}
+        # User overrides on top of defaults. disable_tag_suggestions is an
+        # operator-only kill switch (env var) and must never be overridden
+        # by the settings file/API.
+        merged = defaults.model_dump() | {
+            k: v for k, v in file_data.items() if v is not None and k != "disable_tag_suggestions"
+        }
         return FieldPreferences.model_validate(merged)
     except (json.JSONDecodeError, ValidationError) as e:
         logger.warning(f"Invalid field preferences config file, using defaults: {e}")
@@ -162,6 +169,10 @@ def save_field_preferences(preferences: FieldPreferences) -> None:
     overrides = {}
 
     for field in FieldPreferences.model_fields:
+        # disable_tag_suggestions is an operator-only kill switch (env var)
+        # and must never be persisted as a user-settable override.
+        if field == "disable_tag_suggestions":
+            continue
         user_val = getattr(preferences, field)
         default_val = getattr(defaults, field)
         if user_val != default_val:
@@ -185,8 +196,11 @@ def load_user_overrides() -> dict[str, str | None]:
     Returns:
         Dict with all preference fields, None for non-overridden fields.
     """
-    # Start with all fields as None (no override)
-    result: dict[str, str | None] = {field: None for field in FieldPreferences.model_fields}
+    # Start with all fields as None (no override). disable_tag_suggestions is
+    # an operator-only kill switch (env var) and is not user-overridable.
+    result: dict[str, str | None] = {
+        field: None for field in FieldPreferences.model_fields if field != "disable_tag_suggestions"
+    }
 
     if not PREFERENCES_FILE.exists():
         return result
@@ -201,6 +215,23 @@ def load_user_overrides() -> dict[str, str | None]:
     except (json.JSONDecodeError, ValidationError) as e:
         logger.warning(f"Invalid field preferences config file: {e}")
         return result
+
+
+def enforce_operator_disable_tag_suggestions(prefs: FieldPreferences) -> FieldPreferences:
+    """Force disable_tag_suggestions to the env-resolved operator value.
+
+    disable_tag_suggestions is an operator-only kill switch (env var) and
+    must never be settable by a client. Apply this to any FieldPreferences
+    built from external input (request bodies, headers) before it's used,
+    regardless of whether it went through load_field_preferences().
+
+    Args:
+        prefs: A FieldPreferences instance, possibly built from client input.
+
+    Returns:
+        A copy of prefs with disable_tag_suggestions forced to get_defaults().
+    """
+    return prefs.model_copy(update={"disable_tag_suggestions": get_defaults().disable_tag_suggestions})
 
 
 def reset_field_preferences() -> FieldPreferences:

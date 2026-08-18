@@ -6,6 +6,7 @@ from pydantic import BaseModel
 
 from homebox_companion.core.field_preferences import (
     FieldPreferences,
+    enforce_operator_disable_tag_suggestions,
     get_defaults,
     load_user_overrides,
     reset_field_preferences,
@@ -119,6 +120,10 @@ async def get_prompt_preview(
     """
     prefs = body.field_preferences
 
+    # disable_tag_suggestions is an operator-only kill switch (env var) and
+    # must never be settable by a client via the request body.
+    prefs = enforce_operator_disable_tag_suggestions(prefs)
+
     # Use provided preferences directly - they already have defaults baked in
     field_prefs = prefs.get_effective_customizations()
     output_language = prefs.output_language
@@ -126,12 +131,17 @@ async def get_prompt_preview(
     if output_language.lower() == "english":
         output_language = None
 
-    # Example tags for preview
-    example_tags = [
-        {"id": "abc123", "name": "Electronics"},
-        {"id": "def456", "name": "Tools"},
-        {"id": "ghi789", "name": "Supplies"},
-    ]
+    # Example tags for preview - omitted when tag suggestions are disabled so
+    # the preview matches what the LLM actually receives at runtime.
+    example_tags = (
+        []
+        if prefs.disable_tag_suggestions
+        else [
+            {"id": "abc123", "name": "Electronics"},
+            {"id": "def456", "name": "Tools"},
+            {"id": "ghi789", "name": "Supplies"},
+        ]
+    )
 
     # Generate the system prompt
     prompt = build_detection_system_prompt(
